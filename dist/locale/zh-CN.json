@@ -1,0 +1,8 @@
+{
+  "userGuard.userDisabled": "该账号已被禁用，请联系管理员。",
+  "userGuard.passwordRequired": "删除用户需要输入当前登录用户的密码。",
+  "userGuard.passwordIncorrect": "当前登录用户密码错误，无法删除用户。",
+  "userGuard.rootProtected": "root 用户（id=1）不可被禁用。",
+  "userGuard.selfProtected": "不能禁用当前登录用户。",
+  "userGuard.targetNotFound": "目标用户不存在。"
+}

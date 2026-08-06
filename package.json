@@ -1,0 +1,44 @@
+{
+  "name": "nocobase-plugin-user_guard",
+  "version": "1.0.0",
+  "main": "dist/server/index.js",
+  "displayName": "用户登录控制",
+  "displayName.zh-CN": "用户登录控制",
+  "description": "User login control: disable/enable users, password-verified user deletion, block disabled users from login and immediately invalidate their sessions.",
+  "description.zh-CN": "用户登录控制：用户禁用/启用、删除二次验证（当前登录用户密码）、禁用用户禁止登录（所有认证方式）并即时失效会话。",
+  "keywords": [
+    "nocobase",
+    "plugin",
+    "user",
+    "guard",
+    "disable",
+    "login",
+    "session",
+    "用户登录控制"
+  ],
+  "license": "MIT",
+  "homepage": "https://github.com/kevinwonstans/nocobase-plugin-user_guard",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/kevinwonstans/nocobase-plugin-user_guard.git"
+  },
+  "files": [
+    "dist",
+    "client.js",
+    "client.d.ts",
+    "client-v2.js",
+    "client-v2.d.ts",
+    "server.js",
+    "server.d.ts",
+    "README.md"
+  ],
+  "peerDependencies": {
+    "@nocobase/client": "2.x",
+    "@nocobase/client-v2": "2.x",
+    "@nocobase/database": "2.x",
+    "@nocobase/server": "2.x"
+  },
+  "dependencies": [
+    "@nocobase/plugin-users"
+  ]
+}

@@ -1,0 +1,8 @@
+{
+  "userGuard.userDisabled": "This account has been disabled. Please contact the administrator.",
+  "userGuard.passwordRequired": "Please enter the current user's password to delete a user.",
+  "userGuard.passwordIncorrect": "The current user's password is incorrect. User deletion is denied.",
+  "userGuard.rootProtected": "The root user (id=1) cannot be disabled.",
+  "userGuard.selfProtected": "You cannot disable the currently logged-in user.",
+  "userGuard.targetNotFound": "The target user does not exist."
+}
