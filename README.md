@@ -10,6 +10,7 @@ NocoBase 用户登录控制插件：用户禁用/启用、删除二次验证、�
 
 1. **用户状态字段**：`users.status`（title「是否启用」，`active`=启用 / `disabled`=禁用，默认 `active`）。插件启用时幂等添加字段并回填存量数据（PostgreSQL `ADD COLUMN ... DEFAULT 'active'` 自动回填），可移植到任意环境。
 2. **禁止直接删除用户（二次验证）**：`users:destroy` 必须携带**当前登录用户**的密码（`password` 参数），密码缺失或错误一律拒绝（HTTP 400，`USER_GUARD_PASSWORD_REQUIRED` / `USER_GUARD_PASSWORD_INCORRECT`）。绕过前端直接调用 API 同样被拒绝。
+   - **默认用户管理页删除按钮自动隐藏**：plugin-users 原生「用户」页（v1 `/admin/settings/users-permissions/users` 与 v2 `/v/admin/settings/users-permissions/users`）的行内删除与工具栏批量删除按钮均被隐藏（客户端 DOM 观察器，按路径匹配，离开该页自动恢复），删除统一走本插件管理页的密码二次验证。
 3. **用户禁用/启用**：自定义 API `userGuard:disable` / `userGuard:enable`；管理页提供状态列（启用/禁用 Tag）与禁用/启用按钮。
 4. **禁用用户禁止登录（所有认证方式）**：`auth:signIn` 成功后置检查（覆盖 basic/sms/oauth 等所有认证类型），`status=disabled` 时返回 401（`USER_DISABLED`）并黑名单刚签发的 token（防御纵深）。
 5. **已登录会话立即失效**：资源级中间件对每个请求检查当前用户状态，被禁用用户的任意请求返回 401（`USER_DISABLED`）；客户端拦截器自动清空本地认证状态并跳转登录页。
@@ -111,6 +112,7 @@ src/
 | 删除弹窗：错误密码 → 「当前登录用户密码错误，无法删除用户。」 | ✅ |
 | 删除弹窗：正确密码 → 删除成功 | ✅ |
 | 直调 API 删除（无密码/错密码）→ 400 拒绝 | ✅ |
+| **默认用户管理页删除按钮（行内 + 批量）隐藏** | ✅ |
 
 ### /v/admin/（v2 客户端）
 
@@ -124,6 +126,7 @@ src/
 | 禁用用户会话刷新 → 自动登出跳转 `/v/signin` | ✅ |
 | 禁用用户登录 → 表单内 Alert「该账号已被禁用」+ 6 秒自动退出 | ✅ |
 | 禁用用户点击「注销」→ 成功退出返回登录页（signOut 200） | ✅ BUG 已修复 |
+| **默认用户管理页删除按钮（行内 + 批量）隐藏** | ✅ |
 
 ### API 冒烟（curl）
 

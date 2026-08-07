@@ -145,6 +145,21 @@ class PluginUserGuardServer extends import_server.Plugin {
       }
     });
     this.app.acl.allow("userGuard", ["disable", "enable"], "loggedIn");
+    this.app.acl.use(async (ctx, next) => {
+      var _a, _b, _c, _d, _e, _f;
+      const { resourceName, actionName } = ctx.permission ?? {};
+      if (resourceName === "users" && actionName === "destroy") {
+        const params = ((_a = ctx.action) == null ? void 0 : _a.params) ?? {};
+        const password = params.password ?? ((_b = params.values) == null ? void 0 : _b.password);
+        if (!password) {
+          if (((_d = (_c = ctx.action) == null ? void 0 : _c.params) == null ? void 0 : _d.filterByTk) !== void 0 || ((_f = (_e = ctx.action) == null ? void 0 : _e.params) == null ? void 0 : _f.filter) !== void 0) {
+            ctx.throw(403, "No permissions");
+          }
+          ctx.permission = { ...ctx.permission, can: null };
+        }
+      }
+      await next();
+    });
   }
   /** 禁用/启用共用逻辑（含保护规则） */
   async setStatus(ctx, userId, currentUser, status) {

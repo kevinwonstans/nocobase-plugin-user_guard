@@ -155,6 +155,27 @@ export class PluginUserGuardServer extends Plugin {
       },
     });
     this.app.acl.allow('userGuard', ['disable', 'enable'], 'loggedIn');
+
+    // 四、默认用户管理页隐藏删除按钮（服务端 ACL 层）
+    // 无密码的 users:destroy 一律判定为无权限：
+    // - with-acl-meta 的 per-record 模拟判定会因此把 destroy 从 allowedActions 中剔除，
+    //   v1/v2 客户端的删除按钮（基于 ACL 可见性）自动隐藏（含 root）
+    // - 真实请求无密码时，资源级密码检查先返回 400；此中间件作为兜底拒绝
+    this.app.acl.use(async (ctx, next) => {
+      const { resourceName, actionName } = ctx.permission ?? {};
+      if (resourceName === 'users' && actionName === 'destroy') {
+        const params = ctx.action?.params ?? {};
+        const password = params.password ?? params.values?.password;
+        if (!password) {
+          if (ctx.action?.params?.filterByTk !== undefined || ctx.action?.params?.filter !== undefined) {
+            // 真实删除请求兜底（正常已被资源级密码检查拦截）
+            ctx.throw(403, 'No permissions');
+          }
+          ctx.permission = { ...ctx.permission, can: null };
+        }
+      }
+      await next();
+    });
   }
 
   /** 禁用/启用共用逻辑（含保护规则） */
