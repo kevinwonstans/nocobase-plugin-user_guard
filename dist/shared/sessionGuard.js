@@ -26,9 +26,11 @@ var __copyProps = (to, from, except, desc) => {
 var __toCommonJS = (mod) => __copyProps(__defProp({}, "__esModule", { value: true }), mod);
 var sessionGuard_exports = {};
 __export(sessionGuard_exports, {
-  installUserGuardSessionInterceptor: () => installUserGuardSessionInterceptor
+  installUserGuardSessionInterceptor: () => installUserGuardSessionInterceptor,
+  proactivelyVerifyOAuthCallbackToken: () => proactivelyVerifyOAuthCallbackToken
 });
 module.exports = __toCommonJS(sessionGuard_exports);
+var import_antd = require("antd");
 var import_constants = require("./constants");
 function getLocation(app) {
   var _a, _b, _c;
@@ -38,7 +40,6 @@ function getLocation(app) {
   return { pathname, search };
 }
 function redirectToSignin(app, replace = false) {
-  var _a;
   const router = app.router;
   const { pathname, search } = getLocation(app);
   if (pathname.endsWith("/signin") || pathname.endsWith("/signin/")) {
@@ -47,7 +48,10 @@ function redirectToSignin(app, replace = false) {
   const basename = (router == null ? void 0 : router.basename) ?? "/admin";
   const rawPath = pathname.startsWith(basename) ? pathname.slice(basename.length) : pathname;
   const redirect = encodeURIComponent(`${rawPath.startsWith("/") ? rawPath : `/${rawPath}` || "/"}${search}`);
-  (_a = router == null ? void 0 : router.navigate) == null ? void 0 : _a.call(router, `/signin?redirect=${redirect}`, { replace });
+  const isV2 = window.location.pathname.startsWith("/v/");
+  const signinPath = isV2 ? "/v/signin" : "/signin";
+  const signinUrl = `${signinPath}?redirect=${redirect}`;
+  window.location.href = signinUrl;
 }
 function installUserGuardSessionInterceptor(app) {
   const apiClient = app.apiClient;
@@ -55,6 +59,7 @@ function installUserGuardSessionInterceptor(app) {
     return;
   }
   let countdownTimer = null;
+  let notified = false;
   apiClient.axios.interceptors.response.use(
     (response) => response,
     (error) => {
@@ -82,16 +87,50 @@ function installUserGuardSessionInterceptor(app) {
         }
         return Promise.reject(error);
       }
+      if (!notified) {
+        notified = true;
+        import_antd.notification.error({ message: first.message, placement: "topRight" });
+      }
+      if (error.config) {
+        error.config.skipNotify = true;
+      }
       apiClient.auth.setToken(null);
       apiClient.auth.setRole(null);
       apiClient.auth.setAuthenticator(null);
-      redirectToSignin(app, false);
-      return new Promise(() => {
-      });
-    }
+      setTimeout(() => redirectToSignin(app, false), 1500);
+      return Promise.reject(error);
+    },
+    { unshift: true }
   );
+}
+function proactivelyVerifyOAuthCallbackToken(app) {
+  const apiClient = app == null ? void 0 : app.apiClient;
+  if (!(apiClient == null ? void 0 : apiClient.auth)) {
+    return;
+  }
+  let token = null;
+  let authenticator = null;
+  try {
+    const params = new URLSearchParams(window.location.search);
+    token = params.get("token");
+    authenticator = params.get("authenticator");
+  } catch {
+    return;
+  }
+  if (!token) {
+    return;
+  }
+  if (!apiClient.auth.getToken()) {
+    apiClient.auth.setToken(token);
+  }
+  if (authenticator && !apiClient.auth.getAuthenticator()) {
+    apiClient.auth.setAuthenticator(authenticator);
+  }
+  apiClient.resource("auth").check().catch(() => {
+  });
 }
 // Annotate the CommonJS export names for ESM import in node:
 0 && (module.exports = {
-  installUserGuardSessionInterceptor
+  installUserGuardSessionInterceptor,
+  proactivelyVerifyOAuthCallbackToken
 });

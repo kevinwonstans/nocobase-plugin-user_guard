@@ -11,6 +11,6 @@ module.exports = {
   "@nocobase/client": "2.1.34",
   "@nocobase/client-v2": "2.1.34",
   "@nocobase/server": "2.1.34",
-  "react": "18.3.1",
-  "antd": "5.24.2"
+  "antd": "5.24.2",
+  "react": "18.3.1"
 };
