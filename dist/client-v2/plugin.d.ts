@@ -9,5 +9,17 @@ import { Application, Plugin } from '@nocobase/client-v2';
  */
 export declare class PluginUserGuardClientV2 extends Plugin<any, Application> {
     load(): Promise<void>;
+    /**
+     * 钉钉 OAuth 回调路径修正（v2 专用）
+     *
+     * 第三方钉钉插件（nocobase-plugin-dingtalk）的 redirectAuth 把 token 重定向回
+     * 根路径（APP_PUBLIC_PATH || "/"），导致 v2 入口发起的登录在回调后落入 v1 应用，
+     * 被拒时用户被困在 v1 登录页。
+     *
+     * 修复：拦截 getAuthUrl 响应（钉钉授权 URL），当其 redirect_uri 的 redirect 参数
+     * 为空时补 "/v/" 标记 —— 回调将重定向到 /v/（v2 应用），由 v2 插件的会话守卫
+     * 处理（提示 + 整页跳转回 /v/signin）。
+     */
+    private patchDingTalkOAuthRedirect;
 }
 export default PluginUserGuardClientV2;

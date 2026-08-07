@@ -39,10 +39,16 @@ function getLocation(app) {
   const search = (loc == null ? void 0 : loc.search) ?? window.location.search ?? "";
   return { pathname, search };
 }
+let oauthRedirectTarget = null;
 function redirectToSignin(app, replace = false) {
   const router = app.router;
   const { pathname, search } = getLocation(app);
   if (pathname.endsWith("/signin") || pathname.endsWith("/signin/")) {
+    return;
+  }
+  if (oauthRedirectTarget) {
+    const target = oauthRedirectTarget.startsWith("/v/") ? "/v/signin" : "/signin";
+    window.location.href = `${target}?redirect=${encodeURIComponent(oauthRedirectTarget)}`;
     return;
   }
   const basename = (router == null ? void 0 : router.basename) ?? "/admin";
@@ -60,48 +66,51 @@ function installUserGuardSessionInterceptor(app) {
   }
   let countdownTimer = null;
   let notified = false;
-  apiClient.axios.interceptors.response.use(
-    (response) => response,
-    (error) => {
-      var _a, _b;
-      const response = error == null ? void 0 : error.response;
-      if ((response == null ? void 0 : response.status) !== 401) {
-        return Promise.reject(error);
-      }
-      const errors = (_a = response == null ? void 0 : response.data) == null ? void 0 : _a.errors;
-      const first = Array.isArray(errors) ? errors[0] : null;
-      if (!first || first.code !== import_constants.USER_DISABLED_CODE) {
-        return Promise.reject(error);
-      }
-      const requestUrl = ((_b = error == null ? void 0 : error.config) == null ? void 0 : _b.url) ?? "";
-      const isSignInRequest = String(requestUrl).includes("auth:signIn");
-      if (isSignInRequest) {
-        if (!countdownTimer) {
-          countdownTimer = setTimeout(() => {
-            countdownTimer = null;
-            apiClient.auth.setToken(null);
-            apiClient.auth.setRole(null);
-            apiClient.auth.setAuthenticator(null);
-            redirectToSignin(app, true);
-          }, import_constants.LOGOUT_COUNTDOWN_SECONDS * 1e3);
-        }
-        return Promise.reject(error);
-      }
-      if (!notified) {
-        notified = true;
-        import_antd.notification.error({ message: first.message, placement: "topRight" });
-      }
-      if (error.config) {
-        error.config.skipNotify = true;
-      }
-      apiClient.auth.setToken(null);
-      apiClient.auth.setRole(null);
-      apiClient.auth.setAuthenticator(null);
-      setTimeout(() => redirectToSignin(app, false), 1500);
+  const onFulfilled = (response) => response;
+  const onRejected = (error) => {
+    var _a, _b;
+    const response = error == null ? void 0 : error.response;
+    if ((response == null ? void 0 : response.status) !== 401) {
       return Promise.reject(error);
-    },
-    { unshift: true }
-  );
+    }
+    const errors = (_a = response == null ? void 0 : response.data) == null ? void 0 : _a.errors;
+    const first = Array.isArray(errors) ? errors[0] : null;
+    if (!first || first.code !== import_constants.USER_DISABLED_CODE) {
+      return Promise.reject(error);
+    }
+    const requestUrl = ((_b = error == null ? void 0 : error.config) == null ? void 0 : _b.url) ?? "";
+    const isSignInRequest = String(requestUrl).includes("auth:signIn");
+    if (isSignInRequest) {
+      if (!countdownTimer) {
+        countdownTimer = setTimeout(() => {
+          countdownTimer = null;
+          apiClient.auth.setToken(null);
+          apiClient.auth.setRole(null);
+          apiClient.auth.setAuthenticator(null);
+          redirectToSignin(app, true);
+        }, import_constants.LOGOUT_COUNTDOWN_SECONDS * 1e3);
+      }
+      return Promise.reject(error);
+    }
+    if (!notified) {
+      notified = true;
+      import_antd.notification.error({ message: first.message, placement: "topRight" });
+    }
+    if (error.config) {
+      error.config.skipNotify = true;
+    }
+    apiClient.auth.setToken(null);
+    apiClient.auth.setRole(null);
+    apiClient.auth.setAuthenticator(null);
+    setTimeout(() => redirectToSignin(app, false), 1500);
+    return Promise.reject(error);
+  };
+  apiClient.axios.interceptors.response.use(onFulfilled, onRejected);
+  const handlers = apiClient.axios.interceptors.response.handlers;
+  if (Array.isArray(handlers) && handlers.length) {
+    const handler = handlers.pop();
+    handlers.unshift(handler);
+  }
 }
 function proactivelyVerifyOAuthCallbackToken(app) {
   const apiClient = app == null ? void 0 : app.apiClient;

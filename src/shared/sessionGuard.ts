@@ -53,12 +53,21 @@ function getLocation(app: UserGuardAppLike): { pathname: string; search: string 
   return { pathname, search };
 }
 
+/** OAuth 回调携带的登录后目标（若以 /v/ 开头则跳回 v2 登录页） */
+let oauthRedirectTarget: string | null = null;
+
 /** 跳转登录页（保留 redirect 参数），已在登录页则跳过 */
 function redirectToSignin(app: UserGuardAppLike, replace = false) {
   const router = app.router;
   const { pathname, search } = getLocation(app);
   // 已在登录页（路径以 /signin 结尾，兼容 v1 /signin 与 v2 /v/signin）则跳过
   if (pathname.endsWith('/signin') || pathname.endsWith('/signin/')) {
+    return;
+  }
+  // OAuth 回调携带的 redirect 目标：以 /v/ 开头 → 回 v2 登录页（用户从 v2 入口发起）
+  if (oauthRedirectTarget) {
+    const target = oauthRedirectTarget.startsWith('/v/') ? '/v/signin' : '/signin';
+    window.location.href = `${target}?redirect=${encodeURIComponent(oauthRedirectTarget)}`;
     return;
   }
   const basename = router?.basename ?? '/admin';
@@ -81,57 +90,64 @@ export function installUserGuardSessionInterceptor(app: UserGuardAppLike) {
   let countdownTimer: ReturnType<typeof setTimeout> | null = null;
   let notified = false;
 
-  apiClient.axios.interceptors.response.use(
-    (response: any) => response,
-    (error: any) => {
-      const response = error?.response;
-      if (response?.status !== 401) {
-        return Promise.reject(error);
-      }
-      const errors = response?.data?.errors;
-      const first = Array.isArray(errors) ? errors[0] : null;
-      if (!first || first.code !== USER_DISABLED_CODE) {
-        return Promise.reject(error);
-      }
-      const requestUrl = error?.config?.url ?? '';
-      const isSignInRequest = String(requestUrl).includes('auth:signIn');
-
-      if (isSignInRequest) {
-        // 登录被拒：保留登录页内置错误提示，倒计时结束后自动退出登录
-        if (!countdownTimer) {
-          countdownTimer = setTimeout(() => {
-            countdownTimer = null;
-            apiClient.auth.setToken(null);
-            apiClient.auth.setRole(null);
-            apiClient.auth.setAuthenticator(null);
-            redirectToSignin(app, true);
-          }, LOGOUT_COUNTDOWN_SECONDS * 1000);
-        }
-        // 不吞错：让内置错误提示（v1 通知 / v2 表单 Alert）正常展示
-        return Promise.reject(error);
-      }
-
-      // 会话即时失效：弹一次提示 + 清本地状态，短暂延迟后整页跳转登录页
-      // （延迟保证提示可见；整页跳转重新干净加载登录页，避免初始化卡住）
-      if (!notified) {
-        notified = true;
-        notification.error({ message: first.message, placement: 'topRight' });
-      }
-      // 阻止后续拦截器（内置错误通知）重复弹提示
-      if (error.config) {
-        error.config.skipNotify = true;
-      }
-      apiClient.auth.setToken(null);
-      apiClient.auth.setRole(null);
-      apiClient.auth.setAuthenticator(null);
-      setTimeout(() => redirectToSignin(app, false), 1500);
-      // 注意：不能吞错（永不 settle 的 Promise）——否则 auth:check 等初始化请求
-      // 会永久挂起，v1 应用初始化卡在 Loading 页（钉钉回调场景的空白页）。
-      // reject 后由应用自身的认证流程继续（跳转登录页）。
+  const onFulfilled = (response: any) => response;
+  const onRejected = (error: any) => {
+    const response = error?.response;
+    if (response?.status !== 401) {
       return Promise.reject(error);
-    },
-    { unshift: true },
-  );
+    }
+    const errors = response?.data?.errors;
+    const first = Array.isArray(errors) ? errors[0] : null;
+    if (!first || first.code !== USER_DISABLED_CODE) {
+      return Promise.reject(error);
+    }
+    const requestUrl = error?.config?.url ?? '';
+    const isSignInRequest = String(requestUrl).includes('auth:signIn');
+
+    if (isSignInRequest) {
+      // 登录被拒：保留登录页内置错误提示，倒计时结束后自动退出登录
+      if (!countdownTimer) {
+        countdownTimer = setTimeout(() => {
+          countdownTimer = null;
+          apiClient.auth.setToken(null);
+          apiClient.auth.setRole(null);
+          apiClient.auth.setAuthenticator(null);
+          redirectToSignin(app, true);
+        }, LOGOUT_COUNTDOWN_SECONDS * 1000);
+      }
+      // 不吞错：让内置错误提示（v1 通知 / v2 表单 Alert）正常展示
+      return Promise.reject(error);
+    }
+
+    // 会话即时失效：弹一次提示 + 清本地状态，短暂延迟后整页跳转登录页
+    // （延迟保证提示可见；整页跳转重新干净加载登录页，避免初始化卡住）
+    if (!notified) {
+      notified = true;
+      notification.error({ message: first.message, placement: 'topRight' });
+    }
+    // 阻止后续拦截器（内置错误通知）重复弹提示
+    if (error.config) {
+      error.config.skipNotify = true;
+    }
+    apiClient.auth.setToken(null);
+    apiClient.auth.setRole(null);
+    apiClient.auth.setAuthenticator(null);
+    setTimeout(() => redirectToSignin(app, false), 1500);
+    // 注意：不能吞错（永不 settle 的 Promise）——否则 auth:check 等初始化请求
+    // 会永久挂起，v1 应用初始化卡在 Loading 页（钉钉回调场景的空白页）。
+    // reject 后由应用自身的认证流程继续（跳转登录页）。
+    return Promise.reject(error);
+  };
+
+  // 注意：axios 1.x（本项目 1.19）的 use() 第三参数仅支持 synchronous/runWhen，
+  // 不支持 unshift 选项 —— 直接追加会在内置通知拦截器之后执行（内置先弹提示，
+  // 我们再弹 → 出现 2 个提示框）。因此手动把处理器插入 handlers 最前。
+  apiClient.axios.interceptors.response.use(onFulfilled, onRejected);
+  const handlers = apiClient.axios.interceptors.response.handlers;
+  if (Array.isArray(handlers) && handlers.length) {
+    const handler = handlers.pop();
+    handlers.unshift(handler);
+  }
 }
 
 /**
