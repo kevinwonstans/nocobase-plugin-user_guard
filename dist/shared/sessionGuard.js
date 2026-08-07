@@ -75,7 +75,16 @@ function installUserGuardSessionInterceptor(app) {
     }
     const errors = (_a = response == null ? void 0 : response.data) == null ? void 0 : _a.errors;
     const first = Array.isArray(errors) ? errors[0] : null;
-    if (!first || first.code !== import_constants.USER_DISABLED_CODE) {
+    if (!first) {
+      return Promise.reject(error);
+    }
+    if (first.code === "EMPTY_TOKEN") {
+      if (error.config) {
+        error.config.skipNotify = true;
+      }
+      return Promise.reject(error);
+    }
+    if (first.code !== import_constants.USER_DISABLED_CODE) {
       return Promise.reject(error);
     }
     const requestUrl = ((_b = error == null ? void 0 : error.config) == null ? void 0 : _b.url) ?? "";

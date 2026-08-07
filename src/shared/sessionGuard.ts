@@ -98,7 +98,18 @@ export function installUserGuardSessionInterceptor(app: UserGuardAppLike) {
     }
     const errors = response?.data?.errors;
     const first = Array.isArray(errors) ? errors[0] : null;
-    if (!first || first.code !== USER_DISABLED_CODE) {
+    if (!first) {
+      return Promise.reject(error);
+    }
+    // 未认证（EMPTY_TOKEN）：正常未登录状态（如钉钉被拒清 token 后的初始化请求、
+    // 登录页 auth:check），静音内置通知，避免弹出"未认证。请登录以继续。"
+    if (first.code === 'EMPTY_TOKEN') {
+      if (error.config) {
+        error.config.skipNotify = true;
+      }
+      return Promise.reject(error);
+    }
+    if (first.code !== USER_DISABLED_CODE) {
       return Promise.reject(error);
     }
     const requestUrl = error?.config?.url ?? '';
